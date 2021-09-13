@@ -1,12 +1,17 @@
 package bitTorrents;
 import java.util.*;
-
-public class Message {
+import java.io.Serializable;
+public class Message implements Serializable{
     private int messageLength;
     private byte messageType;
     private List<Integer> payload;
-
+    private String bitfield = null;
     public Message(){}
+
+    public void setBitfield(String bitfield) {
+        this.bitfield = bitfield;
+    }
+
     public Message(int messageLength, byte messageType, List<Integer> payload) {
         this.messageLength = messageLength;
         this.messageType = messageType;
