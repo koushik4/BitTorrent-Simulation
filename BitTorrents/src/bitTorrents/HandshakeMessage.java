@@ -1,6 +1,6 @@
 package bitTorrents;
-
-public class HandshakeMessage {
+import java.io.Serializable;
+public class HandshakeMessage implements Serializable{
     private int id;
     private String handshakeHeader;
     private String zeroBits;

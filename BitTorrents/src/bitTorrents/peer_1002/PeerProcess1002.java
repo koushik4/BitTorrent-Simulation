@@ -1,12 +1,13 @@
 package bitTorrents.peer_1002;
 
+import bitTorrents.HandshakeMessage;
 import bitTorrents.Message;
 
 import java.util.*;
 import java.net.*;
 import java.io.*;
 public class PeerProcess1002 {
-    private ServerSocket serverSocket = null; //SOcket to start the server
+    private ServerSocket serverSocket = null; //Socket to start the server
     private List<Socket> connectionsFrom = null; //Peers which are connecting to this server
     private List<Socket> connectedTo = null;//Peers which this peers is connecting to
     private int PORT;
@@ -16,8 +17,9 @@ public class PeerProcess1002 {
     int numberOfPrefferedNeighbours; // # of Prefereed Neighbor (neighbour.size() <= numberOfPrefferedNeighbours)
     int n,m; //n - UnchokingInterval, m - OptimisticUnchokingInterval
     int pieceSize;
-    List<Integer> fileContents;
-
+    private List<Integer> fileContents;
+    private HashMap<Socket, Long> downloadRate = null;//Download rate of all peers
+    private String bitfield = null;
 
     PeerProcess1002(){}
     PeerProcess1002(int PORT, int ID, int numberOfPrefferedNeighbours,int n,int m,int pieceSize) {
@@ -34,6 +36,7 @@ public class PeerProcess1002 {
             this.m = m;
             this.pieceSize = pieceSize;
             this.fileContents = new ArrayList<>();
+            this.downloadRate = new HashMap<>();
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -42,67 +45,138 @@ public class PeerProcess1002 {
     void startServer() {
         try {
             while (true) {
-                System.out.println("Listening to..");
+                System.out.println("Listening to.."+this.PORT);
                 Socket socket = serverSocket.accept();
+                System.out.println("Connected");
                 connectionsFrom.add(socket);
-                break;
+                /*
+                 * Send the handshake signal by invoking sendHandshake
+                 * function
+                 */
+                sendHandshake(socket);
+                System.out.println("Handshake Sent");
+                downloadRate.put(socket,System.nanoTime());
+                Thread.sleep(500);
             }
         }catch (Exception e){e.printStackTrace();}
     }
-    //Continously read the data coming to the socket/peer
+    //read the data coming to the socket/peer continuously
     void read(){
-        for(Socket socket:connectedTo){
-            try{
-                ObjectInputStream objectInputStream = new ObjectInputStream(socket.getInputStream());
-                List<Integer> l = (List<Integer>) objectInputStream.readObject();
-                System.out.println(l+"hello");
-                /*
-                 * Process the message and send the appropriate message
-                 * by creating a Message object and invoke send function
-                 */
-//                send(socket,new Message());
-            }catch (Exception e){e.printStackTrace();continue;}
-        }
-        for(Socket socket:connectionsFrom){
-            try{
-                InputStream inputStream = socket.getInputStream();
-                int i = 0;String s = "";
-                while((i=inputStream.read()) != -1)s += (char)i;
-                System.out.println(s + "hello");
-            }catch (Exception e){e.printStackTrace();continue;}
+        System.out.println("Reading....");
+        while(true) {
+//            System.out.println(connectionsFrom);
+            for (Socket socket : connectedTo) {
+                try {
+                    ObjectInputStream objectInputStream = new ObjectInputStream(socket.getInputStream());
+                    Object object = objectInputStream.readObject();
+//                    System.out.println(object);
+                    if (object instanceof  bitTorrents.HandshakeMessage) {
+                        downloadRate.put(socket,System.nanoTime() - downloadRate.get(socket));
+                        System.out.println("Handshake Received");
+                        /*
+                         * Either send the handshake signal by invoking sendHandshake(socket) function
+                         * or Process the message and send the appropriate message
+                         * by creating a Message object and invoke send(socket,message) function
+                         */
+                    } else {
+                        /*
+                         * Process the message and send the appropriate message
+                         * by creating a Message object and invoke send function
+                         */
+                    }
+                    Thread.sleep(500);
+                } catch (Exception e) {e.printStackTrace();continue;}
+            }
+//            System.out.println(connectionsFrom);
+            for (Socket socket : connectionsFrom) {
+                try {
+//                    System.out.println(socket+" hi");
+                    ObjectInputStream objectInputStream = new ObjectInputStream(socket.getInputStream());
+                    Object object = objectInputStream.readObject();
+//                    System.out.println(object);
+                    if (object instanceof  bitTorrents.HandshakeMessage) {
+                        downloadRate.put(socket,System.nanoTime() - downloadRate.get(socket));
+                        System.out.println("Handshake Received");
+                        /*
+                         * Either send the handshake signal by invoking sendHandshake(socket) function
+                         * or Process the message and send the appropriate message
+                         * by creating a Message object and invoke send(socket,message) function
+                         */
+                    } else {
+                        /*
+                         * Process the message and send the appropriate message
+                         * by creating a Message object and invoke send function
+                         */
+                    }
+                } catch (Exception e) {e.printStackTrace();continue;}
+            }
+            try{Thread.sleep(1000);}catch (Exception e){}
         }
     }
-
+    //Change Neighbours wrt download rate
+    void changeNeighbours() {
+        TreeSet<Socket> set = new TreeSet<>((a,b)->(int)(downloadRate.get(a)-downloadRate.get(b)));
+        neighbours.clear();
+        set.addAll(downloadRate.keySet());Iterator<Socket> it = set.iterator();
+        while(neighbours.size() < Math.min(set.size(),this.numberOfPrefferedNeighbours))
+            neighbours.add(it.next());
+    }
+    //Change Handshake Signal
+    void sendHandshake(Socket socket) {
+        try {
+            HandshakeMessage handshakeMessage = new HandshakeMessage(this.ID);
+            ObjectOutputStream objectOutputStream = new ObjectOutputStream(socket.getOutputStream());
+            objectOutputStream.writeObject(handshakeMessage);
+        }catch(Exception e){e.printStackTrace();}
+    }
     //Send a messaage
     void send(Socket socket, Message message) {
         try {
-            socket.getOutputStream().write(("Fuck you").getBytes());
+            ObjectOutputStream objectOutputStream = new ObjectOutputStream(socket.getOutputStream());
+            objectOutputStream.writeObject(message);
         }catch (Exception e){e.printStackTrace();}
     }
-
+    //Unchoking Interval Countdown
     void unchokingInterval() {
-        try {
-            int count = this.n;
-            Thread.sleep(this.n * 1000);
-            System.out.println("Change neighbours"); //Change neighbours
-        }catch(Exception e){e.printStackTrace();}
+        while (true){
+            try {
+                Thread.sleep(this.n * 1000);
+                System.out.println("Change neighbours"); //Change neighbours
+                this.changeNeighbours();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
     }
-
-    void optimisticUnchokedInterval(int m) {
-        try {
-            Thread.sleep(m*1000);
-            System.out.println("Change optimistically unchoked neighbour"); //Change optimistically unchoked neighbour
-        }catch(Exception e){e.printStackTrace();}
+    //optimistic Unchoked Interval Countdown
+    void optimisticUnchokedInterval() {
+        while(true) {
+            try {
+                Thread.sleep(this.m * 1000);
+                System.out.println("Change optimistically unchoked neighbour"); //Change optimistically unchoked neighbour
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
     }
-
     //Connect this socket to other peer
     boolean connect(String host,int PORT) {
         try{
             Socket socket = new Socket(host,PORT);
-            socket.getOutputStream().write(("Hello").getBytes());
             connectedTo.add(socket);
+            /*
+             * Send the handshake signal by invoking sendHandshake
+             * function
+             */
+            sendHandshake(socket);
+            System.out.println("Handshake Sent");
+            downloadRate.put(socket,System.nanoTime());
             return true;
         }catch(Exception e){e.printStackTrace();return false;}
+    }
+    //Set Port number
+    public void setPORT(int PORT) {
+        this.PORT = PORT;
     }
 
     public static void main(String[] args) throws Exception{
@@ -114,20 +188,57 @@ public class PeerProcess1002 {
          * 4) If the user has file, divide the file into chunks(Main Thread)
          * 5) Start the timer for neighbour(Thread t3) and optimistically unchoked neighbour(Thread t4)
          */
-        FileInputStream common = new FileInputStream("src/bitTorrents/Common.cfg");
+
+        /* Get data from common.cfg */
+        int id = Integer.parseInt("1002");
+        FileInputStream common = new FileInputStream("bitTorrents/Common.cfg");
         Properties properties = new Properties();
-        properties.load(common);
+        properties.load(common);int port = 0;
         int numberOfPrefferedNeighbours = Integer.parseInt(properties.getProperty("NumberOfPreferredNeighbors"));
         int n = Integer.parseInt(properties.getProperty("UnchokingInterval"));
         int m = Integer.parseInt(properties.getProperty("OptimisticUnchokingInterval"));
         int pieceSize = Integer.parseInt(properties.getProperty("PieceSize"));
         String fileName = properties.getProperty("FileName",null);
         System.out.println(numberOfPrefferedNeighbours+" "+n+" "+m+" "+pieceSize+" "+fileName);
-        bitTorrents.peer_1002.PeerProcess1002 peerProcess = new bitTorrents.peer_1002.PeerProcess1002(10004,1001,2,10,15,1000);
-        peerProcess.connect("localhost",10003);
-//        peerProcess.startServer();//Thread t1
-        peerProcess.read();// Thread t2
+        PeerProcess1002 peerProcess = new PeerProcess1002(1002,id,numberOfPrefferedNeighbours,n,m,pieceSize);
+        /* ****** */
 
+        /* Get data from PeerInfo.cfg and connect */
+        FileInputStream inputStream = new FileInputStream("bitTorrents/PeerInfo.cfg");
+        String data = "";int i = 0;
+        while((i=inputStream.read()) != -1){data += (char)i;}
+        String[] peers = data.split("\n");
+        for(String peer:peers){
+            String[] content = peer.split(" ");
+            if(Integer.parseInt(content[0]) == id){
+                port = Integer.parseInt(content[2]);
+                peerProcess.setPORT(port);
+                break;
+            }
+            String peerHost = content[1];
+            int peerPort = Integer.parseInt(content[2]);
+            peerProcess.connect(peerHost,peerPort);
+        }
+        /* ****** */
+
+        /* Define all Threads */
+        Thread t1 = new Thread(()->{
+            peerProcess.startServer();
+        });
+        Thread t2 = new Thread(()->{
+            peerProcess.read();
+        });
+        Thread t3 = new Thread(()->{
+            peerProcess.unchokingInterval();
+        });
+        Thread t4 = new Thread(()->{
+            peerProcess.optimisticUnchokedInterval();
+        });
+        /* ****** */
+
+        /* Start all Threads */
+        t1.start();t2.start();
+        t3.start();t4.start();
+        /* ****** */
     }
 }
-
