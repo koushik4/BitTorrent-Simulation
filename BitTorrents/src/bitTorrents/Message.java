@@ -4,12 +4,26 @@ import java.io.Serializable;
 public class Message implements Serializable{
     private int messageLength;
     private byte messageType;
+
+    private int indexField;
     private List<Integer> payload;
     private String bitfield = null;
-    public Message(){}
+    public Message(){messageType = -1;}
+
+    public int getIndexField() {
+        return indexField;
+    }
+
+    public void setIndexField(int indexField) {
+        this.indexField = indexField;
+    }
 
     public void setBitfield(String bitfield) {
         this.bitfield = bitfield;
+    }
+
+    public String getBitfield() {
+        return bitfield;
     }
 
     public Message(int messageLength, byte messageType, List<Integer> payload) {
